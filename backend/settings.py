@@ -3,10 +3,21 @@ Django settings for WorkHub backend project.
 Database: PostgreSQL | Auth: JWT (SimpleJWT) | CORS: django-cors-headers
 """
 
+import os
 from pathlib import Path
 from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file if it exists
+env_path = BASE_DIR / '.env'
+if env_path.exists():
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#'):
+                key, val = line.split('=', 1)
+                os.environ[key.strip()] = val.strip()
 
 # ──────────────────────────────────────────────
 # Security
@@ -72,11 +83,11 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'smartPMS',
-        'USER': 'postgres',
-        'PASSWORD':'Mahaldar@saad1',   # ← Replace with your actual password
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.environ.get('DB_NAME', 'smartPMS'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'Mahaldar@saad1'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
