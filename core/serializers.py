@@ -208,6 +208,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'id', 'title', 'project', 'project_name', 'department',
             'department_name', 'priority', 'status',
             'assignee', 'assignee_name', 'assignee_avatar',
+            'report', 'proceed_flag',
             'created_at', 'updated_at'
         ]
 

@@ -28,6 +28,7 @@ urlpatterns = [
 
     # ── Current User ───────────────────────────────────────────────
     path('users/me/', views.MeView.as_view(), name='me'),
+    path('users/me/avatar/', views.UserAvatarUploadView.as_view(), name='user-avatar-upload'),
 
     # ── Dashboard ─────────────────────────────────────────────────
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),

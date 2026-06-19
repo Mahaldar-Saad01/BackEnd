@@ -7,7 +7,7 @@ from django.core.management import call_command
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
-output_path = r"C:\Users\onyxs\.gemini\antigravity-ide\brain\e188edc6-7d40-4858-b8db-e058038aa593\migrations_result.txt"
+output_path = r"C:\Users\onyxs\.gemini\antigravity-ide\brain\49bb86fb-f3cd-4531-8a19-00556de8db6c\migrations_result.txt"
 
 with open(output_path, "w") as f:
     f.write("Starting migrations script...\n")

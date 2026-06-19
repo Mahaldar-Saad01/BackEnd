@@ -188,6 +188,8 @@ class Task(models.Model):
         blank=True,
         related_name='assigned_tasks'
     )
+    report = models.TextField(blank=True, default='')
+    proceed_flag = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

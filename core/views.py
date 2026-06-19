@@ -5,12 +5,14 @@ Events, Meetings, Chat, Notifications, Dashboard, Settings.
 """
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
+from django.core.files.storage import default_storage
 
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -280,17 +282,17 @@ class TaskViewSet(viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
         user = request.user
-        # Employees may only update their own task's status
+        # Employees may only update their own task's status and report
         if user.role == 'employee':
             if instance.assignee != user:
                 return Response(
                     {'detail': 'You can only update your own tasks.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
-            allowed = {'status'}
+            allowed = {'status', 'report'}
             if not set(request.data.keys()).issubset(allowed):
                 return Response(
-                    {'detail': 'Employees may only update task status.'},
+                    {'detail': 'Employees may only update task status and report.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
         # Managers may only update tasks in their projects
@@ -300,7 +302,43 @@ class TaskViewSet(viewsets.ModelViewSet):
                     {'detail': 'You can only update tasks in your projects.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
-        return super().partial_update(request, *args, **kwargs)
+        
+        old_status = instance.status
+        old_proceed = instance.proceed_flag
+
+        response = super().partial_update(request, *args, **kwargs)
+        
+        instance.refresh_from_db()
+        
+        # Trigger notifications
+        if old_status != 'review' and instance.status == 'review':
+            # Identify the manager who assigned the task / project lead manager
+            manager = None
+            if instance.project and instance.project.lead_manager:
+                manager = instance.project.lead_manager
+            elif instance.assignee and instance.assignee.team_lead:
+                manager = instance.assignee.team_lead
+            
+            if manager:
+                Notification.objects.create(
+                    user=manager,
+                    title="Task Review Requested",
+                    text=f"Employee {user.full_name} submitted task '{instance.title}' for review.",
+                    icon="fa-eye",
+                    color="warning"
+                )
+
+        if not old_proceed and instance.proceed_flag:
+            if instance.assignee:
+                Notification.objects.create(
+                    user=instance.assignee,
+                    title="Task Approved",
+                    text=f"Manager {user.full_name} raised proceed flag for task '{instance.title}'.",
+                    icon="fa-circle-check",
+                    color="success"
+                )
+
+        return response
 
 
 # ──────────────────────────────────────────────
@@ -480,3 +518,31 @@ class SystemSettingsView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return SystemSettings.load()
+
+
+# ──────────────────────────────────────────────
+# User Avatar Upload
+# ──────────────────────────────────────────────
+class UserAvatarUploadView(APIView):
+    """POST /api/users/me/avatar/ — upload avatar for current authenticated user"""
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, *args, **kwargs):
+        if 'avatar' not in request.FILES:
+            return Response({'detail': 'No avatar file was submitted.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        avatar_file = request.FILES['avatar']
+        
+        # Save to default storage
+        file_path = default_storage.save(f'avatars/{avatar_file.name}', avatar_file)
+        
+        # Build the absolute URL
+        avatar_url = request.build_absolute_uri(default_storage.url(file_path))
+        
+        # Update user's avatar_url field
+        user = request.user
+        user.avatar_url = avatar_url
+        user.save()
+        
+        return Response({'avatar_url': avatar_url}, status=status.HTTP_200_OK)
