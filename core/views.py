@@ -140,6 +140,13 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         emp.save()
         return Response(UserSerializer(emp).data)
 
+    @action(detail=False, methods=['get'], url_path='chat-list')
+    def chat_list(self, request):
+        """GET /api/employees/chat-list/"""
+        users = User.objects.filter(is_active=True).select_related('department').order_by('full_name')
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
+
 
 # ──────────────────────────────────────────────
 # Department ViewSet
@@ -392,10 +399,69 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         room = self.request.query_params.get('room', 'general')
+        if room.startswith('dm_'):
+            try:
+                _, first_id, second_id = room.split('_', 2)
+                participant_ids = {int(first_id), int(second_id)}
+            except (ValueError, TypeError):
+                return Message.objects.none()
+
+            if self.request.user.id not in participant_ids:
+                return Message.objects.none()
+
         return Message.objects.filter(room=room).select_related('sender', 'receiver')
 
     def perform_create(self, serializer):
         serializer.save(sender=self.request.user)
+
+    @action(detail=False, methods=['get'], url_path='conversations')
+    def conversations(self, request):
+        """GET /api/chat/messages/conversations/"""
+        user = request.user
+        from django.db.models import Q, Count
+        
+        unread_counts = Message.objects.filter(
+            receiver=user,
+            is_read=False,
+            room__startswith='dm_'
+        ).values('sender_id').annotate(count=Count('id'))
+        
+        unread_map = {item['sender_id']: item['count'] for item in unread_counts}
+        
+        all_dms = Message.objects.filter(
+            Q(sender=user) | Q(receiver=user)
+        ).filter(room__startswith='dm_').values_list('sender_id', 'receiver_id')
+        
+        participant_ids = set()
+        for s_id, r_id in all_dms:
+            if s_id != user.id:
+                participant_ids.add(s_id)
+            if r_id and r_id != user.id:
+                participant_ids.add(r_id)
+                
+        result = []
+        for p_id in participant_ids:
+            result.append({
+                'user_id': p_id,
+                'unread_count': unread_map.get(p_id, 0)
+            })
+            
+        return Response(result)
+
+    @action(detail=False, methods=['post'], url_path='mark-read')
+    def mark_read(self, request):
+        """POST /api/chat/messages/mark-read/"""
+        room = request.data.get('room')
+        if not room:
+            return Response({'detail': 'Room is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        updated = Message.objects.filter(
+            room=room,
+            receiver=request.user,
+            is_read=False
+        ).update(is_read=True)
+        
+        return Response({'detail': f'{updated} message(s) marked as read.'})
 
 
 # ──────────────────────────────────────────────
