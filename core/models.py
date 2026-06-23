@@ -6,6 +6,7 @@ Event, Meeting, Message, Notification, SystemSettings
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.db import models
 from django.utils import timezone
+import uuid
 
 
 # ──────────────────────────────────────────────
@@ -233,25 +234,72 @@ class Event(models.Model):
 # ──────────────────────────────────────────────
 # Meeting
 # ──────────────────────────────────────────────
+# class Meeting(models.Model):
+#     PLATFORM_CHOICES = [
+#         ('Zoom', 'Zoom'),
+#         ('MS Teams', 'MS Teams'),
+#         ('Google Meet', 'Google Meet'),
+#     ]
+#     STATUS_CHOICES = [
+#         ('upcoming', 'Upcoming'),
+#         ('live', 'Live'),
+#         ('ended', 'Ended'),
+#     ]
+
+#     title = models.CharField(max_length=200)
+#     date = models.DateField()
+#     time = models.TimeField()
+#     duration = models.PositiveIntegerField(help_text='Duration in minutes', default=30)
+#     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='Zoom')
+#     agenda = models.TextField(blank=True, default='')
+#     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='upcoming')
+#     creator = models.ForeignKey(
+#         User,
+#         on_delete=models.SET_NULL,
+#         null=True,
+#         blank=True,
+#         related_name='created_meetings'
+#     )
+#     created_at = models.DateTimeField(auto_now_add=True)
+
+#     class Meta:
+#         ordering = ['date', 'time']
+
+#     def __str__(self):
+#         return f"{self.title} ({self.date})"
+
+# ──────────────────────────────────────────────
+# Meeting
+# ──────────────────────────────────────────────
+import uuid
+
 class Meeting(models.Model):
     PLATFORM_CHOICES = [
-        ('Zoom', 'Zoom'),
-        ('MS Teams', 'MS Teams'),
-        ('Google Meet', 'Google Meet'),
+        ('Jitsi', 'Jitsi Meet'),
     ]
     STATUS_CHOICES = [
         ('upcoming', 'Upcoming'),
         ('live', 'Live'),
         ('ended', 'Ended'),
+        ('cancelled', 'Cancelled'),
     ]
 
     title = models.CharField(max_length=200)
     date = models.DateField()
     time = models.TimeField()
     duration = models.PositiveIntegerField(help_text='Duration in minutes', default=30)
-    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='Zoom')
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='Jitsi')
+    room_name = models.CharField(max_length=120, unique=True, editable=False, blank=True)
     agenda = models.TextField(blank=True, default='')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='upcoming')
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='meetings'
+    )
     creator = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -259,14 +307,25 @@ class Meeting(models.Model):
         blank=True,
         related_name='created_meetings'
     )
+    participants = models.ManyToManyField(
+        User,
+        related_name='meetings_invited',
+        blank=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['date', 'time']
 
+    def save(self, *args, **kwargs):
+        if not self.room_name:
+            self.room_name = f'workhub-{uuid.uuid4().hex[:12]}'
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.title} ({self.date})"
-
+    
 
 # ──────────────────────────────────────────────
 # Message (Chat)
