@@ -20,12 +20,20 @@ from .models import (
     Department, Project, Task, Event, Meeting,
     Message, Notification, SystemSettings
 )
+# from .serializers import (
+#     CustomTokenObtainPairSerializer,
+#     DepartmentSerializer,
+#     UserSerializer, UserCreateSerializer, UserUpdateSerializer,
+#     ProjectSerializer, TaskSerializer, EventSerializer,
+#     MeetingSerializer, MessageSerializer, NotificationSerializer,
+#     SystemSettingsSerializer, ChangePasswordSerializer
+# )
 from .serializers import (
     CustomTokenObtainPairSerializer,
     DepartmentSerializer,
     UserSerializer, UserCreateSerializer, UserUpdateSerializer,
     ProjectSerializer, TaskSerializer, EventSerializer,
-    MeetingSerializer, MessageSerializer, NotificationSerializer,
+    MeetingSerializer, MeetingJoinSerializer, MessageSerializer, NotificationSerializer,
     SystemSettingsSerializer, ChangePasswordSerializer
 )
 from .permissions import IsAdmin, IsAdminOrManager
@@ -376,17 +384,166 @@ class EventViewSet(viewsets.ModelViewSet):
 # ──────────────────────────────────────────────
 # Meeting ViewSet
 # ──────────────────────────────────────────────
+# class MeetingViewSet(viewsets.ModelViewSet):
+#     """GET/POST /api/meetings/"""
+#     serializer_class = MeetingSerializer
+#     permission_classes = [IsAuthenticated]
+
+#     def get_queryset(self):
+#         return Meeting.objects.select_related('creator').all()
+
+#     def perform_create(self, serializer):
+#         serializer.save(creator=self.request.user)
+# ──────────────────────────────────────────────
+# Meeting ViewSet
+# ──────────────────────────────────────────────
 class MeetingViewSet(viewsets.ModelViewSet):
-    """GET/POST /api/meetings/"""
+    """
+    GET    /api/meetings/            — list (role-scoped)
+    POST   /api/meetings/            — create (admin/manager only)
+    GET    /api/meetings/<id>/       — retrieve
+    PUT    /api/meetings/<id>/       — update (creator/admin only)
+    DELETE /api/meetings/<id>/       — cancel (creator/admin only)
+    GET    /api/meetings/<id>/join/  — get room info to launch Jitsi
+    """
     serializer_class = MeetingSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Meeting.objects.select_related('creator').all()
+        user = self.request.user
+        qs = Meeting.objects.select_related('creator', 'project').prefetch_related('participants')
+        if user.role == 'admin':
+            return qs.all()
+        return qs.filter(
+            Q(creator=user) | Q(participants=user)
+        ).distinct()
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [IsAuthenticated(), IsAdminOrManager()]
+        return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        serializer.save(creator=self.request.user)
+        meeting = serializer.save(creator=self.request.user)
 
+        # Notify all participants
+        participants = meeting.participants.all()
+        for participant in participants:
+            if participant != self.request.user:
+                Notification.objects.create(
+                    user=participant,
+                    title="Meeting Invitation",
+                    text=(
+                        f"You have been invited to '{meeting.title}' "
+                        f"on {meeting.date} at {meeting.time} "
+                        f"by {self.request.user.full_name}."
+                    ),
+                    icon="fa-video",
+                    color="info"
+                )
+    
+    # def perform_update(self, serializer):
+    #     meeting = self.get_object()
+    #     user = self.request.user
+    #     if user.role != 'admin' and meeting.creator != user:
+    #         from rest_framework.exceptions import PermissionDenied
+    #         raise PermissionDenied("Only the creator or admin can edit this meeting.")
+    #     serializer.save()
+    def perform_update(self, serializer):
+    # Get old participants before save
+        old_participant_ids = set(
+            self.get_object().participants.values_list('id', flat=True)
+        )
+
+        meeting = serializer.save()
+
+        # Find newly added participants
+        new_participant_ids = set(
+            meeting.participants.values_list('id', flat=True)
+        )
+        added_ids = new_participant_ids - old_participant_ids
+
+        # Notify only newly added participants
+        for participant in meeting.participants.filter(id__in=added_ids):
+            if participant != self.request.user:
+                Notification.objects.create(
+                    user=participant,
+                    title="Meeting Invitation",
+                    text=(
+                        f"You have been added to '{meeting.title}' "
+                        f"on {meeting.date} at {meeting.time} "
+                        f"by {self.request.user.full_name}."
+                    ),
+                    icon="fa-video",
+                    color="info"
+                )
+
+    # def destroy(self, request, *args, **kwargs):
+    #     meeting = self.get_object()
+    #     if request.user.role != 'admin' and meeting.creator != request.user:
+    #         return Response(
+    #             {'detail': 'Only the creator or admin can cancel this meeting.'},
+    #             status=status.HTTP_403_FORBIDDEN
+    #         )
+    #     meeting.status = 'cancelled'
+    #     meeting.save()
+    #     return Response({'detail': 'Meeting cancelled.'})
+    def destroy(self, request, *args, **kwargs):
+        meeting = self.get_object()
+
+        # Only creator or admin can delete
+        if request.user.role != 'admin' and meeting.creator != request.user:
+            return Response(
+                {'detail': 'Only the creator or admin can delete this meeting.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Notify participants that meeting was cancelled
+        for participant in meeting.participants.all():
+            if participant != request.user:
+                Notification.objects.create(
+                    user=participant,
+                    title="Meeting Cancelled",
+                    text=(
+                        f"'{meeting.title}' scheduled on {meeting.date} "
+                        f"at {meeting.time} has been cancelled by "
+                        f"{request.user.full_name}."
+                    ),
+                    icon="fa-calendar-xmark",
+                    color="danger"
+                )
+
+        meeting.delete()
+        return Response(
+            {'detail': 'Meeting deleted successfully.'},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['get'], url_path='join')
+    def join(self, request, pk=None):
+        meeting = self.get_object()
+        user = request.user
+
+        is_participant = meeting.participants.filter(id=user.id).exists()
+        is_creator = meeting.creator_id == user.id
+        is_admin = user.role == 'admin'
+
+        if not (is_participant or is_creator or is_admin):
+            return Response(
+                {'detail': 'You are not invited to this meeting.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if meeting.status == 'upcoming':
+            meeting.status = 'live'
+            meeting.save()
+
+        serializer = MeetingJoinSerializer(meeting)
+        return Response({
+            **serializer.data,
+            'display_name': user.full_name,
+            'jitsi_domain': 'meet.jit.si'
+        })
 
 # ──────────────────────────────────────────────
 # Message (Chat) ViewSet

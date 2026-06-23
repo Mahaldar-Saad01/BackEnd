@@ -193,9 +193,9 @@ class ProjectSerializer(serializers.ModelSerializer):
         return obj.department.name if obj.department else ''
 
 
-# ──────────────────────────────────────────────
-# Task
-# ──────────────────────────────────────────────
+# # ──────────────────────────────────────────────
+# # Task
+# # ──────────────────────────────────────────────
 class TaskSerializer(serializers.ModelSerializer):
     assignee_name = serializers.SerializerMethodField()
     project_name = serializers.SerializerMethodField()
@@ -225,6 +225,8 @@ class TaskSerializer(serializers.ModelSerializer):
         return obj.department.name if obj.department else ''
 
 
+
+
 # ──────────────────────────────────────────────
 # Event (Calendar)
 # ──────────────────────────────────────────────
@@ -250,24 +252,61 @@ class EventSerializer(serializers.ModelSerializer):
 # ──────────────────────────────────────────────
 # Meeting
 # ──────────────────────────────────────────────
+# class MeetingSerializer(serializers.ModelSerializer):
+#     creator_name = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model = Meeting
+#         fields = [
+#             'id', 'title', 'date', 'time', 'duration',
+#             'platform', 'agenda', 'status', 'creator', 'creator_name', 'created_at'
+#         ]
+#         read_only_fields = ['creator', 'created_at']
+
+#     def get_creator_name(self, obj):
+#         return obj.creator.full_name if obj.creator else ''
+
+#     def create(self, validated_data):
+#         validated_data['creator'] = self.context['request'].user
+#         return super().create(validated_data)
+# ──────────────────────────────────────────────
+# Meeting
+# ──────────────────────────────────────────────
 class MeetingSerializer(serializers.ModelSerializer):
     creator_name = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
+    participant_names = serializers.SerializerMethodField()
 
     class Meta:
         model = Meeting
         fields = [
-            'id', 'title', 'date', 'time', 'duration',
-            'platform', 'agenda', 'status', 'creator', 'creator_name', 'created_at'
+            'id', 'title', 'date', 'time', 'duration', 'platform',
+            'room_name', 'agenda', 'status',
+            'project', 'project_name',
+            'creator', 'creator_name',
+            'participants', 'participant_names',
+            'created_at'
         ]
-        read_only_fields = ['creator', 'created_at']
+        read_only_fields = ['creator', 'room_name', 'created_at']
 
     def get_creator_name(self, obj):
         return obj.creator.full_name if obj.creator else ''
+
+    def get_project_name(self, obj):
+        return obj.project.name if obj.project else ''
+
+    def get_participant_names(self, obj):
+        return [p.full_name for p in obj.participants.all()]
 
     def create(self, validated_data):
         validated_data['creator'] = self.context['request'].user
         return super().create(validated_data)
 
+
+class MeetingJoinSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Meeting
+        fields = ['id', 'title', 'room_name', 'status']
 
 # ──────────────────────────────────────────────
 # Message (Chat)
