@@ -6,6 +6,7 @@ import secrets
 import string
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from rest_framework import serializers
@@ -145,9 +146,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
             is_first_login=True,
         )
 
-        # Email the temporary password (console backend prints to terminal)
+        # Email the temporary password to the employee's inbox.
         send_mail(
-            subject='Welcome to WorkHub — Your Account Credentials',
+            subject='Welcome to WorkHub - Your Account Credentials',
             message=(
                 f"Hello {user.full_name},\n\n"
                 f"Your WorkHub account has been created by your administrator.\n\n"
@@ -157,9 +158,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
                 f"IMPORTANT: You will be asked to set a new password on first login.\n\n"
                 f"Best regards,\nWorkHub System"
             ),
-            from_email='noreply@workhub.com',
+            from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[user.email],
-            fail_silently=True,
+            fail_silently=False,
         )
 
         return user
