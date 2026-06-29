@@ -164,14 +164,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
                 recipient_list=[user.email],
                 fail_silently=False,
             )
-            return Response({
-                "message": "Employee created and credentials emailed successfully"
-            }, status=201)
+            return user
         except Exception as e:
-            return Response({
-                "error": "Employee created but email failed",
-                "details": str(e)
-            }, status=500)
+            print("the error is :",str(e))
+            return user
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
