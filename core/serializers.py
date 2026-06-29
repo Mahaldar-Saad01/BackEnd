@@ -11,7 +11,8 @@ from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-
+from rest_framework.response import Response
+from rest_framework import status
 from .models import (
     Department, Project, Task, Event, Meeting,
     Message, Notification, SystemSettings
