@@ -42,7 +42,7 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ('name', 'lead_manager', 'department', 'status', 'progress')
+    list_display = ('name', 'lead_manager', 'department', 'status', 'progress', 'original_document', 'preview_document')
     list_filter = ('status', 'department')
     search_fields = ('name',)
 

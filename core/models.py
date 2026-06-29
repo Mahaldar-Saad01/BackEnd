@@ -139,6 +139,8 @@ class Project(models.Model):
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
     progress = models.PositiveIntegerField(default=0)
+    original_document = models.FileField(upload_to='project_docs/originals/', null=True, blank=True)
+    preview_document = models.FileField(upload_to='project_docs/previews/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
