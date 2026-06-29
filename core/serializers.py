@@ -167,7 +167,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
             return user
         except Exception as e:
             print("the error is :",str(e))
-            return user
+            raise e
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
