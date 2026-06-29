@@ -147,21 +147,24 @@ class UserCreateSerializer(serializers.ModelSerializer):
         )
 
         # Email the temporary password to the employee's inbox.
-        send_mail(
-            subject='Welcome to WorkHub - Your Account Credentials',
-            message=(
-                f"Hello {user.full_name},\n\n"
-                f"Your WorkHub account has been created by your administrator.\n\n"
-                f"Login URL: http://localhost:5500/FrontEnd/login.html\n"
-                f"Email: {user.email}\n"
-                f"Temporary Password: {temp_password}\n\n"
-                f"IMPORTANT: You will be asked to set a new password on first login.\n\n"
-                f"Best regards,\nWorkHub System"
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
+        try:
+            send_mail(
+                subject='Welcome to WorkHub - Your Account Credentials',
+                message=(
+                    f"Hello {user.full_name},\n\n"
+                    f"Your WorkHub account has been created by your administrator.\n\n"
+                    f"Login URL: http://localhost:5500/FrontEnd/login.html\n"
+                    f"Email: {user.email}\n"
+                    f"Temporary Password: {temp_password}\n\n"
+                    f"IMPORTANT: You will be asked to set a new password on first login.\n\n"
+                    f"Best regards,\nWorkHub System"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            print("Email sending failed:",str(e))
 
         return user
 
