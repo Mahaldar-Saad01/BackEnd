@@ -25,6 +25,8 @@ urlpatterns = [
     path('auth/register/',        views.RegisterEmployeeView.as_view(),      name='register'),
     path('auth/logout/',          views.LogoutView.as_view(),                name='logout'),
     path('auth/change-password/', views.ChangePasswordView.as_view(),        name='change-password'),
+    path('auth/password-otp/request/', views.PasswordOtpRequestView.as_view(), name='password-otp-request'),
+    path('auth/password-otp/confirm/', views.PasswordOtpConfirmView.as_view(), name='password-otp-confirm'),
 
     # ── Current User ───────────────────────────────────────────────
     path('users/me/', views.MeView.as_view(), name='me'),

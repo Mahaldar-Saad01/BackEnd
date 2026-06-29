@@ -4,15 +4,18 @@ All API endpoints: Auth, Employees, Departments, Projects, Tasks,
 Events, Meetings, Chat, Notifications, Dashboard, Settings.
 """
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db.models import Count, Q
 from django.core.files.storage import default_storage
+from django.core.mail import send_mail
+import random
 
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -31,7 +34,7 @@ from .models import (
 from .serializers import (
     CustomTokenObtainPairSerializer,
     DepartmentSerializer,
-    UserSerializer, UserCreateSerializer, UserUpdateSerializer,
+    UserSerializer, UserCreateSerializer, UserUpdateSerializer, UserProfileUpdateSerializer,
     ProjectSerializer, TaskSerializer, EventSerializer,
     MeetingSerializer, MeetingJoinSerializer, MessageSerializer, NotificationSerializer,
     SystemSettingsSerializer, ChangePasswordSerializer
@@ -70,9 +73,8 @@ class MeView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        serializer = UserUpdateSerializer(instance, data=request.data, partial=partial)
+        serializer = UserProfileUpdateSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         return Response(UserSerializer(user).data)
@@ -89,8 +91,81 @@ class ChangePasswordView(APIView):
             user.set_password(serializer.validated_data['new_password'])
             user.is_first_login = False
             user.save()
+            Notification.objects.create(
+                user=user,
+                title='Password changed',
+                text='Your WorkHub password was changed successfully.',
+                icon='fa-lock',
+                color='success',
+            )
             return Response({'detail': 'Password changed successfully.'})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordOtpRequestView(APIView):
+    """POST /api/auth/password-otp/request/ — send password-change OTP to user's email."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        otp = ''.join(str(random.SystemRandom().randint(0, 9)) for _ in range(6))
+        cache.set(f'password_change_otp:{user.id}', otp, timeout=600)
+
+        send_mail(
+            subject='WorkHub password change OTP',
+            message=(
+                f"Hello {user.full_name},\n\n"
+                f"Your WorkHub password change OTP is: {otp}\n"
+                f"This code expires in 10 minutes.\n\n"
+                f"If you did not request this, ignore this email."
+            ),
+            from_email=None,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+
+        return Response({'detail': 'OTP sent to your registered email.'})
+
+
+class PasswordOtpConfirmView(APIView):
+    """POST /api/auth/password-otp/confirm/ — verify OTP and update password."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        otp = str(request.data.get('otp', '')).strip()
+        new_password = request.data.get('new_password', '')
+        confirm_password = request.data.get('confirm_password', '')
+
+        serializer = ChangePasswordSerializer(data={
+            'new_password': new_password,
+            'confirm_password': confirm_password,
+        })
+        serializer.is_valid(raise_exception=True)
+
+        if not otp:
+            return Response({'otp': 'OTP is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        cache_key = f'password_change_otp:{request.user.id}'
+        saved_otp = cache.get(cache_key)
+        if not saved_otp:
+            return Response({'otp': 'OTP expired. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
+        if otp != saved_otp:
+            return Response({'otp': 'Invalid OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        user.set_password(serializer.validated_data['new_password'])
+        user.is_first_login = False
+        user.save()
+        cache.delete(cache_key)
+        Notification.objects.create(
+            user=user,
+            title='Password changed',
+            text='Your WorkHub password was changed successfully after OTP verification.',
+            icon='fa-lock',
+            color='success',
+        )
+
+        return Response({'detail': 'Password changed successfully.'})
 
 
 class LogoutView(APIView):
@@ -180,6 +255,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 # Project ViewSet
 # ──────────────────────────────────────────────
 class ProjectViewSet(viewsets.ModelViewSet):
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     """
     GET    /api/projects/       — list (role-scoped)
     POST   /api/projects/       — create (admin/manager)
@@ -365,7 +441,7 @@ class EventViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Event.objects.select_related('creator').all()
+        return Event.objects.select_related('creator').filter(creator=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(creator=self.request.user)

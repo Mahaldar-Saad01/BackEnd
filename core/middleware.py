@@ -24,3 +24,14 @@ class JWTAuthMiddleware(BaseMiddleware):
         token = query_params.get("token", [None])[0]
         scope["user"] = await get_user_from_token(token) if token else AnonymousUser()
         return await super().__call__(scope, receive, send)
+
+
+class AllowMediaFrameMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if request.path.startswith('/media/'):
+            response.headers.pop('X-Frame-Options', None)
+        return response

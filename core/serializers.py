@@ -4,6 +4,7 @@ Covers all models with appropriate read/write handling.
 """
 import secrets
 import string
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
@@ -16,6 +17,8 @@ from .models import (
 )
 
 User = get_user_model()
+
+PDF_CONTENT_TYPE = 'application/pdf'
 
 
 class DepartmentCustomField(serializers.PrimaryKeyRelatedField):
@@ -171,20 +174,42 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         fields = ['full_name', 'email', 'role', 'department', 'team_lead', 'status', 'avatar_url']
 
 
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['full_name', 'email']
+
+
 # ──────────────────────────────────────────────
 # Project
 # ──────────────────────────────────────────────
 class ProjectSerializer(serializers.ModelSerializer):
     lead_manager_name = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
+    original_document_url = serializers.SerializerMethodField()
+    original_document_name = serializers.SerializerMethodField()
+    preview_document_url = serializers.SerializerMethodField()
+    preview_document_name = serializers.SerializerMethodField()
+    project_document = serializers.FileField(
+        source='original_document',
+        required=False,
+        allow_null=True,
+        write_only=True
+    )
+    project_document_url = serializers.SerializerMethodField()
+    project_document_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
         fields = [
             'id', 'name', 'lead_manager', 'lead_manager_name',
             'department', 'department_name', 'status', 'progress',
+            'original_document', 'original_document_url', 'original_document_name',
+            'preview_document', 'preview_document_url', 'preview_document_name',
+            'project_document', 'project_document_url', 'project_document_name',
             'created_at', 'updated_at'
         ]
+        read_only_fields = ['preview_document']
 
     def get_lead_manager_name(self, obj):
         return obj.lead_manager.full_name if obj.lead_manager else ''
@@ -192,6 +217,57 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_department_name(self, obj):
         return obj.department.name if obj.department else ''
 
+    def _absolute_file_url(self, file_field):
+        if not file_field:
+            return ''
+        request = self.context.get('request')
+        url = file_field.url
+        return request.build_absolute_uri(url) if request else url
+
+    def _file_name(self, file_field):
+        if not file_field:
+            return ''
+        return file_field.name.split('/')[-1]
+
+    def get_original_document_url(self, obj):
+        return self._absolute_file_url(obj.original_document)
+
+    def get_original_document_name(self, obj):
+        return self._file_name(obj.original_document)
+
+    def get_preview_document_url(self, obj):
+        return self.get_original_document_url(obj)
+
+    def get_preview_document_name(self, obj):
+        return self.get_original_document_name(obj)
+
+    def get_project_document_url(self, obj):
+        return self.get_original_document_url(obj)
+
+    def get_project_document_name(self, obj):
+        return self.get_original_document_name(obj)
+
+    def validate_original_document(self, value):
+        if value:
+            ext = Path(value.name or '').suffix.lower()
+            content_type = getattr(value, 'content_type', '')
+            if ext != '.pdf':
+                raise serializers.ValidationError('Only PDF files are allowed.')
+            if content_type != PDF_CONTENT_TYPE:
+                raise serializers.ValidationError('Only application/pdf files are allowed.')
+        return value
+
+    def validate(self, attrs):
+        document = attrs.get('original_document')
+        if document:
+            self.validate_original_document(document)
+        return attrs
+
+    def create(self, validated_data):
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        return super().update(instance, validated_data)
 
 # # ──────────────────────────────────────────────
 # # Task
