@@ -12,7 +12,8 @@ from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-
+from rest_framework.response import Response
+from rest_framework import status
 from .models import (
     Department, Project, Task, Event, Meeting,
     Message, Notification, SystemSettings
@@ -148,16 +149,24 @@ class UserCreateSerializer(serializers.ModelSerializer):
             is_first_login=True,
         )
 
+<<<<<<< HEAD
         login_url = getattr(settings, 'WORKHUB_LOGIN_URL', 'http://localhost:5500/FrontEnd/login.html')
         email_sent = False
 
+=======
+        # Email the temporary password to the employee's inbox.
+>>>>>>> origin/main
         try:
             send_mail(
                 subject='Welcome to WorkHub - Your Account Credentials',
                 message=(
                     f"Hello {user.full_name},\n\n"
                     f"Your WorkHub account has been created by your administrator.\n\n"
+<<<<<<< HEAD
                     f"Login URL: {login_url}\n"
+=======
+                    f"Login URL: http://localhost:5500/FrontEnd/login.html\n"
+>>>>>>> origin/main
                     f"Email: {user.email}\n"
                     f"Temporary Password: {temp_password}\n\n"
                     f"IMPORTANT: You will be asked to set a new password on first login.\n\n"
@@ -167,6 +176,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
                 recipient_list=[user.email],
                 fail_silently=False,
             )
+<<<<<<< HEAD
             email_sent = True
         except Exception:
             logger.exception("Failed to email temporary password for new WorkHub user %s", user.email)
@@ -175,6 +185,12 @@ class UserCreateSerializer(serializers.ModelSerializer):
         user._credentials_email_sent = email_sent
 
         return user
+=======
+            return user
+        except Exception as e:
+            print("the error is :",str(e))
+            raise e
+>>>>>>> origin/main
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
