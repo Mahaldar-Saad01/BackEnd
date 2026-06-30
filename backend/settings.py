@@ -91,14 +91,15 @@ DATABASES = {
     'default': dj_database_url.parse(os.getenv('DATABASE_URL'))
 }
 # {
-        # 'ENGINE': 'django.db.backends.postgresql',
-        # 'NAME': os.getenv('DB_NAME'),
-        # 'USER': os.getenv('DB_USER'),
-        # 'PASSWORD': os.getenv('DB_PASSWORD'),
-        # 'HOST': os.getenv('DB_HOST'),
-        # 'PORT': os.getenv('DB_PORT'),
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': os.getenv('DB_NAME'),
+#         'USER': os.getenv('DB_USER'),
+#         'PASSWORD': os.getenv('DB_PASSWORD'),
+#         'HOST': os.getenv('DB_HOST'),
+#         'PORT': os.getenv('DB_PORT'),
 # }
-
+# }
 
 # ──────────────────────────────────────────────
 # Custom User Model
@@ -147,6 +148,8 @@ EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@workhub.com')
+WORKHUB_LOGIN_URL = os.getenv('WORKHUB_LOGIN_URL', 'http://localhost:5500/FrontEnd/login.html')
+
 
 # ──────────────────────────────────────────────
 # Password validation

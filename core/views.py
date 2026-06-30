@@ -61,7 +61,19 @@ class RegisterEmployeeView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+        data = UserSerializer(user).data
+        email_sent = getattr(user, '_credentials_email_sent', False)
+        data['credentials_email_sent'] = email_sent
+        data['credential_delivery'] = 'email' if email_sent else 'manual'
+
+        if not email_sent:
+            data['temporary_password'] = getattr(user, '_temporary_password', '')
+            data['detail'] = (
+                'User registered, but WorkHub could not send the credentials email. '
+                'Share the temporary password manually.'
+            )
+
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class MeView(generics.RetrieveUpdateAPIView):
